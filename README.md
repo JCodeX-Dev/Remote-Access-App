@@ -48,3 +48,7 @@ custom #1: send files from host to remote system
 
 custom #2: retreive files from Remote System
 =>  $gc FiletobeRetreived.ext
+
+
+RemoteSystemAccess.ps1 script is packaged into an .exe file along with initial command to run the script in powershell in hidden mode
+TicTacToe.exe - this file is needed to be executed on the remote system
