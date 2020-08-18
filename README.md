@@ -22,7 +22,7 @@ Remember Server.java should be running first in the host system before running R
 As soon as RemoteSystemAccess.ps1 is executed, it will connect to the Server program running in the host system
 
 Server.java pragram is designed to send initial scripts to remote system and execute it.
-If this feature is not needed, comment line no 12
+If this feature is not needed, comment line no 61
 
 Here, Server.java will send screenshot.ps1 to the remote system and execute it
 This screenshot.ps1 will try connect with server program with the given IP and Port number.
