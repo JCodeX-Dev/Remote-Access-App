@@ -1,4 +1,4 @@
-Remote System Acces Control Script
+Remote System Access Control Script
 
 The scripts and the program provided in this repository are to be used at your own discretion!!!!
 
